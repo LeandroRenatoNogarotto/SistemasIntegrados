@@ -465,8 +465,46 @@ def dashboard_status() -> dict[str, Any]:
             "cpp": fetch_json(f"http://{cpp_cfg['host']}:{cpp_cfg['port']}/status"),
         },
         "managed": {target: managed_state(target) for target in SERVER_MODULES},
+        "machine": machine_snapshot(),
         "dashboard_runs": runs[:8],
     }
+
+
+def machine_by_server_from_last_load() -> dict[str, Any]:
+    """CPU% e RAM da MAQUINA por servidor, lidos da ultima saturacao (um por vez).
+
+    Como o teste roda um servidor de cada vez, o pico de CPU/RAM da maquina em
+    cada fase reflete o custo real daquele servidor (inclui o binario C++ no WSL,
+    que nao aparece no RSS do processo gateway).
+    """
+    if not LOAD_OUTPUT_DIR.exists():
+        return {}
+    files = sorted(LOAD_OUTPUT_DIR.glob("load-resources-*.csv"), key=lambda p: p.stat().st_mtime)
+    if not files:
+        return {}
+    path = files[-1]
+    per_server: dict[str, dict[str, list[float]]] = {}
+    total_mb = None
+    with path.open("r", newline="", encoding="utf-8") as file:
+        for row in csv.DictReader(file):
+            server = str(row.get("server") or "unknown")
+            cpu = as_float(row.get("machine_cpu_percent"))
+            mem = as_float(row.get("machine_mem_used_mb"))
+            total_mb = as_float(row.get("machine_mem_total_mb")) or total_mb
+            bucket = per_server.setdefault(server, {"cpu": [], "mem": []})
+            if cpu is not None:
+                bucket["cpu"].append(cpu)
+            if mem is not None:
+                bucket["mem"].append(mem)
+    result: dict[str, Any] = {"file": path.name, "mem_total_mb": total_mb, "servers": {}}
+    for server, data in per_server.items():
+        result["servers"][server] = {
+            "cpu_peak_percent": round(max(data["cpu"]), 1) if data["cpu"] else None,
+            "cpu_avg_percent": round(mean(data["cpu"]), 1) if data["cpu"] else None,
+            "mem_peak_mb": round(max(data["mem"]), 1) if data["mem"] else None,
+            "mem_avg_mb": round(mean(data["mem"]), 1) if data["mem"] else None,
+        }
+    return result
 
 
 def dashboard_summary() -> dict[str, Any]:
@@ -490,6 +528,7 @@ def dashboard_summary() -> dict[str, Any]:
         "images": image_rows[-12:],
         "load_windows": load_windows[-30:],
         "latest_load": latest_load_execution(),
+        "machine_by_server": machine_by_server_from_last_load(),
     }
 
 

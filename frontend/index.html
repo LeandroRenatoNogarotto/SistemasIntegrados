@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Painel CGNR</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Reconstrucao de imagens</p>
+        <h1>Painel CGNR</h1>
+      </div>
+      <div class="header-actions">
+        <label class="toggle">
+          <input id="hideNoise" type="checkbox" checked>
+          <span>Ocultar falhas de conexao</span>
+        </label>
+        <label class="toggle">
+          <input id="autoRefresh" type="checkbox" checked>
+          <span>Atualizacao automatica</span>
+        </label>
+        <button id="refreshButton" type="button">Atualizar</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="server-strip" aria-label="Servidores">
+        <article class="server-card" id="pythonStatus">
+          <div class="card-title-row">
+            <h2>Python</h2>
+            <div class="card-title-actions">
+              <span class="status-pill status-offline">offline</span>
+              <button type="button" class="server-toggle" data-target="python">Ligar</button>
+            </div>
+          </div>
+          <dl class="metric-list compact"></dl>
+          <pre class="server-log" hidden></pre>
+        </article>
+        <article class="server-card" id="cppStatus">
+          <div class="card-title-row">
+            <h2>C++</h2>
+            <div class="card-title-actions">
+              <span class="status-pill status-offline">offline</span>
+              <button type="button" class="server-toggle" data-target="cpp">Ligar</button>
+            </div>
+          </div>
+          <dl class="metric-list compact"></dl>
+          <pre class="server-log" hidden></pre>
+        </article>
+      </section>
+
+      <section class="controls-band" aria-label="Execucao">
+        <div class="control-group">
+          <label for="modelSelect">Modelo</label>
+          <select id="modelSelect">
+            <option value="30x30">30 x 30</option>
+            <option value="60x60">60 x 60</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label for="countInput">Amostras</label>
+          <input id="countInput" type="number" value="2" min="1" max="20">
+        </div>
+        <div class="control-group">
+          <label for="gainSelect">Ganho</label>
+          <select id="gainSelect">
+            <option value="scalar">Aleatorio escalar</option>
+            <option value="none">Sem ganho</option>
+            <option value="formula">Formula</option>
+          </select>
+        </div>
+        <button id="runButton" type="button">Iniciar teste</button>
+        <p id="runMessage" class="run-message">Pronto.</p>
+      </section>
+
+      <section class="controls-band" aria-label="Saturacao">
+        <div class="control-group">
+          <label for="loadServerSelect">Servidor</label>
+          <select id="loadServerSelect">
+            <option value="both">Python + C++</option>
+            <option value="python">Python</option>
+            <option value="cpp">C++</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label for="loadClientsInput">Clientes</label>
+          <input id="loadClientsInput" type="number" value="3" min="1" max="60">
+        </div>
+        <div class="control-group">
+          <label for="loadRateInput">Req/min</label>
+          <input id="loadRateInput" type="number" value="200" min="1" max="1000">
+        </div>
+        <div class="control-group">
+          <label for="loadRequestsInput">Requisicoes</label>
+          <input id="loadRequestsInput" type="number" value="200" min="1" max="1000">
+        </div>
+        <button id="loadButton" type="button">Iniciar saturacao</button>
+      </section>
+
+      <section class="panel live-panel" aria-label="Execucao ao vivo">
+        <div class="panel-heading">
+          <h2>Execucao ao vivo</h2>
+          <span id="liveStatus" class="live-badge is-idle">ocioso</span>
+        </div>
+        <div id="liveLog" class="live-log"><span class="log-muted">Nenhuma execucao iniciada ainda. Use "Iniciar teste" ou "Iniciar saturacao".</span></div>
+      </section>
+
+      <section class="kpi-grid" aria-label="Indicadores">
+        <article class="kpi-card">
+          <span class="kpi-label">Execucoes registradas</span>
+          <strong id="totalRuns">0</strong>
+        </article>
+        <article class="kpi-card">
+          <span class="kpi-label">Melhor tempo CGNR</span>
+          <strong id="bestRecon">-</strong>
+        </article>
+        <article class="kpi-card">
+          <span class="kpi-label">Maior vazao media</span>
+          <strong id="bestThroughput">-</strong>
+        </article>
+        <article class="kpi-card">
+          <span class="kpi-label">Ultimo relatorio</span>
+          <strong id="lastReport">-</strong>
+        </article>
+      </section>
+
+      <section class="panel table-panel latest-panel" aria-label="Ultima execucao">
+        <div class="panel-heading">
+          <h2>Ultima execucao de saturacao</h2>
+          <span id="latestLoadFile">-</span>
+        </div>
+        <div class="latest-summary" id="latestLoadSummary"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Servidor</th>
+                <th>OK</th>
+                <th>Falhas</th>
+                <th>Erro</th>
+                <th>Req/min</th>
+                <th>Vazao</th>
+                <th>Reconstrucao</th>
+                <th>P95</th>
+                <th>Fila</th>
+                <th>CPU</th>
+                <th>RAM pico</th>
+              </tr>
+            </thead>
+            <tbody id="latestLoadTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="chart-grid" aria-label="Graficos">
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>Tempo medio de reconstrucao</h2>
+            <span>ms</span>
+          </div>
+          <canvas id="barChart" height="240"></canvas>
+        </article>
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>Historico recente</h2>
+            <span>CGNR</span>
+          </div>
+          <canvas id="timelineChart" height="240"></canvas>
+        </article>
+      </section>
+
+      <section class="data-grid" aria-label="Resultados">
+        <article class="panel table-panel">
+          <div class="panel-heading">
+            <h2>Comparativo</h2>
+            <span id="summaryTime">-</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Servidor</th>
+                  <th>Modelo</th>
+                  <th>OK</th>
+                  <th>Iter.</th>
+                  <th>Reconstrucao</th>
+                  <th>CPU</th>
+                  <th>RAM</th>
+                  <th>Img/s</th>
+                </tr>
+              </thead>
+              <tbody id="aggregateTable"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel table-panel">
+          <div class="panel-heading">
+            <h2>Ultimas requisicoes</h2>
+            <span id="recentCount">0</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Servidor</th>
+                  <th>Sinal</th>
+                  <th>Status</th>
+                  <th>Reconstrucao</th>
+                  <th>Roundtrip</th>
+                  <th>Erro</th>
+                </tr>
+              </thead>
+              <tbody id="recentTable"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="panel table-panel load-panel" aria-label="Saturacao">
+        <div class="panel-heading">
+          <h2>Saturacao adaptativa</h2>
+          <span id="loadCount">0</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Servidor</th>
+                <th>Janela</th>
+                <th>Taxa</th>
+                <th>OK</th>
+                <th>Erro</th>
+                <th>P95</th>
+                <th>Fila</th>
+                <th>Decisao</th>
+              </tr>
+            </thead>
+            <tbody id="loadTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="image-section" aria-label="Imagens reconstruidas">
+        <div class="panel-heading loose">
+          <h2>Imagens reconstruidas (ao vivo)</h2>
+          <span id="imageCount">0</span>
+        </div>
+        <div id="imageGrid" class="image-grid"></div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

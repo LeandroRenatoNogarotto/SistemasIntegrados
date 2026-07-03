@@ -1,0 +1,65 @@
+{
+  "tolerance": 0.0001,
+  "max_iterations": 10,
+  "server": {
+    "queue_limit": 16,
+    "request_timeout_seconds": 300,
+    "memory_soft_limit_bytes": 6000000000,
+    "python": {
+      "host": "127.0.0.1",
+      "port": 8001,
+      "max_workers": "auto"
+    },
+    "cpp": {
+      "host": "127.0.0.1",
+      "port": 8002,
+      "max_workers": "auto"
+    },
+    "dashboard": {
+      "host": "127.0.0.1",
+      "port": 8010
+    }
+  },
+  "load_test": {
+    "default_clients": 3,
+    "initial_rate_per_minute": 60,
+    "max_rate_per_minute": 260,
+    "window_seconds": 15,
+    "max_windows": 6,
+    "step_up_factor": 1.35,
+    "step_down_factor": 0.65,
+    "max_error_rate": 0.05,
+    "max_p95_roundtrip_ms": 15000,
+    "max_avg_queue_ms": 5000
+  },
+  "models": {
+    "30x30": {
+      "width": 30,
+      "height": 30,
+      "rows": 27904,
+      "cols": 900,
+      "h_zip": "data/raw/H-2.csv.zip",
+      "h_csv": "H-2.csv",
+      "h_bin": "data/H-2.f64",
+      "signals": [
+        "data/raw/g-30x30-1.csv",
+        "data/raw/g-30x30-2.csv",
+        "data/raw/A-30x30-1.csv"
+      ]
+    },
+    "60x60": {
+      "width": 60,
+      "height": 60,
+      "rows": 50816,
+      "cols": 3600,
+      "h_zip": "data/raw/H-1.csv.zip",
+      "h_csv": "H-1.csv",
+      "h_bin": "data/H-1.f64",
+      "signals": [
+        "data/raw/G-1.csv",
+        "data/raw/G-2.csv",
+        "data/raw/A-60x60-1.csv"
+      ]
+    }
+  }
+}

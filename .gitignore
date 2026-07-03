@@ -1,0 +1,26 @@
+# Python/cache
+__pycache__/
+*.py[cod]
+
+# Build outputs
+build/
+
+# Runtime outputs and generated reports/images
+outputs/
+
+# Generated binary/cache data
+data/*.npy
+data/*.f64
+data/*.signal.f64
+data/*.metadata.json
+
+# Very large raw input that exceeds GitHub's normal file limit.
+data/raw/H-1.csv.zip
+
+# Local runtime files
+*.pid
+*.log
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 import subprocess
 import sys
 import threading
@@ -14,7 +15,7 @@ from pathlib import Path
 from struct import pack
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
-from urllib.request import urlopen
+from urllib.request import ProxyHandler, build_opener, urlopen
 
 from .metrics import machine_cpu_percent, system_cpu_times, system_memory
 
@@ -77,9 +78,14 @@ def mean(values: list[float | None]) -> float | None:
     return sum(clean) / len(clean)
 
 
+# Opener SEM proxy: no Windows o urlopen padrao faz deteccao de proxy (WPAD/registro)
+# a cada chamada, o que adicionava segundos ao /api/status. Isso evita esse custo.
+_NO_PROXY_OPENER = build_opener(ProxyHandler({}))
+
+
 def fetch_json(url: str, timeout: float = 1.0) -> dict[str, Any]:
     try:
-        with urlopen(url, timeout=timeout) as response:
+        with _NO_PROXY_OPENER.open(url, timeout=timeout) as response:
             return {
                 "online": True,
                 "status_code": response.status,
@@ -193,13 +199,14 @@ def stop_server(target: str) -> dict[str, Any]:
     return {"target": target, "status": "stopped", "pid": proc.pid}
 
 
-def managed_state(target: str) -> dict[str, Any]:
+def managed_state(target: str, online: bool | None = None) -> dict[str, Any]:
     with SERVER_LOCK:
         entry = SERVER_PROCS.get(target)
     running = bool(entry and entry["proc"].poll() is None)
     state: dict[str, Any] = {
         "managed": running,
-        "online": server_online(target),
+        # Reaproveita o online ja obtido em dashboard_status (evita 2a chamada HTTP).
+        "online": server_online(target) if online is None else online,
     }
     if entry:
         state["pid"] = entry["proc"].pid
@@ -458,13 +465,19 @@ def dashboard_status() -> dict[str, Any]:
     cpp_cfg = CONFIG["server"]["cpp"]
     with RUNS_LOCK:
         runs = sorted(RUNS.values(), key=lambda item: item["created_at"], reverse=True)
+    # Busca o /status dos dois servidores EM PARALELO (nesta maquina, conectar numa
+    # porta offline trava ate o timeout; em serie dava ~2s). Reaprovado no managed_state.
+    urls = {
+        "python": f"http://{python_cfg['host']}:{python_cfg['port']}/status",
+        "cpp": f"http://{cpp_cfg['host']}:{cpp_cfg['port']}/status",
+    }
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = {name: pool.submit(fetch_json, url, 0.8) for name, url in urls.items()}
+        servers = {name: future.result() for name, future in futures.items()}
     return {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
-        "servers": {
-            "python": fetch_json(f"http://{python_cfg['host']}:{python_cfg['port']}/status"),
-            "cpp": fetch_json(f"http://{cpp_cfg['host']}:{cpp_cfg['port']}/status"),
-        },
-        "managed": {target: managed_state(target) for target in SERVER_MODULES},
+        "servers": servers,
+        "managed": {target: managed_state(target, bool(servers[target].get("online"))) for target in SERVER_MODULES},
         "machine": machine_snapshot(),
         "dashboard_runs": runs[:8],
     }

@@ -9,14 +9,10 @@
   <body>
     <header class="app-header">
       <div>
-        <p class="eyebrow">Reconstrucao de imagens</p>
-        <h1>Painel CGNR</h1>
+        <p class="eyebrow">Reconstrucao de imagens - CGNR</p>
+        <h1>Painel de desempenho Python x C++</h1>
       </div>
       <div class="header-actions">
-        <label class="toggle">
-          <input id="hideNoise" type="checkbox" checked>
-          <span>Ocultar falhas de conexao</span>
-        </label>
         <label class="toggle">
           <input id="autoRefresh" type="checkbox" checked>
           <span>Atualizacao automatica</span>
@@ -26,32 +22,53 @@
     </header>
 
     <main class="layout">
-      <section class="server-strip" aria-label="Servidores">
+      <!-- ===================== SERVIDORES + MAQUINA ===================== -->
+      <section class="server-strip" aria-label="Servidores e maquina">
         <article class="server-card" id="pythonStatus">
           <div class="card-title-row">
-            <h2>Python</h2>
+            <h2>Python <span class="tag">interpretado</span></h2>
             <div class="card-title-actions">
               <span class="status-pill status-offline">offline</span>
               <button type="button" class="server-toggle" data-target="python">Ligar</button>
             </div>
           </div>
-          <dl class="metric-list compact"></dl>
+          <dl class="metric-list"></dl>
           <pre class="server-log" hidden></pre>
         </article>
+
         <article class="server-card" id="cppStatus">
           <div class="card-title-row">
-            <h2>C++</h2>
+            <h2>C++ <span class="tag">compilado</span></h2>
             <div class="card-title-actions">
               <span class="status-pill status-offline">offline</span>
               <button type="button" class="server-toggle" data-target="cpp">Ligar</button>
             </div>
           </div>
-          <dl class="metric-list compact"></dl>
+          <dl class="metric-list"></dl>
           <pre class="server-log" hidden></pre>
+        </article>
+
+        <article class="server-card machine-card" id="machineCard">
+          <div class="card-title-row">
+            <h2>Maquina (PC)</h2>
+            <span class="status-pill status-machine">total</span>
+          </div>
+          <div class="machine-gauges">
+            <div class="gauge">
+              <div class="gauge-head"><span>CPU</span><strong id="machineCpu">-</strong></div>
+              <div class="bar"><div class="bar-fill cpu" id="machineCpuBar"></div></div>
+            </div>
+            <div class="gauge">
+              <div class="gauge-head"><span>Memoria RAM</span><strong id="machineRam">-</strong></div>
+              <div class="bar"><div class="bar-fill ram" id="machineRamBar"></div></div>
+              <span class="gauge-sub" id="machineRamSub">-</span>
+            </div>
+          </div>
         </article>
       </section>
 
-      <section class="controls-band" aria-label="Execucao">
+      <!-- ===================== CONTROLES ===================== -->
+      <section class="controls-band" aria-label="Comparativo">
         <div class="control-group">
           <label for="modelSelect">Modelo</label>
           <select id="modelSelect">
@@ -71,17 +88,24 @@
             <option value="formula">Formula</option>
           </select>
         </div>
-        <button id="runButton" type="button">Iniciar teste</button>
+        <button id="runButton" type="button">Iniciar comparativo</button>
         <p id="runMessage" class="run-message">Pronto.</p>
       </section>
 
-      <section class="controls-band" aria-label="Saturacao">
+      <section class="controls-band saturation-band" aria-label="Saturacao">
         <div class="control-group">
           <label for="loadServerSelect">Servidor</label>
           <select id="loadServerSelect">
-            <option value="both">Python + C++</option>
+            <option value="both">Python + C++ (um por vez)</option>
             <option value="python">Python</option>
             <option value="cpp">C++</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label for="loadModelSelect">Modelo</label>
+          <select id="loadModelSelect">
+            <option value="30x30">30 x 30</option>
+            <option value="60x60">60 x 60</option>
           </select>
         </div>
         <div class="control-group">
@@ -94,7 +118,7 @@
         </div>
         <div class="control-group">
           <label for="loadRequestsInput">Requisicoes</label>
-          <input id="loadRequestsInput" type="number" value="200" min="1" max="1000">
+          <input id="loadRequestsInput" type="number" value="60" min="1" max="1000">
         </div>
         <button id="loadButton" type="button">Iniciar saturacao</button>
       </section>
@@ -104,147 +128,127 @@
           <h2>Execucao ao vivo</h2>
           <span id="liveStatus" class="live-badge is-idle">ocioso</span>
         </div>
-        <div id="liveLog" class="live-log"><span class="log-muted">Nenhuma execucao iniciada ainda. Use "Iniciar teste" ou "Iniciar saturacao".</span></div>
+        <div id="liveLog" class="live-log"><span class="log-muted">Nenhuma execucao ainda. Ligue os servidores e use "Iniciar comparativo" ou "Iniciar saturacao".</span></div>
       </section>
 
-      <section class="kpi-grid" aria-label="Indicadores">
-        <article class="kpi-card">
-          <span class="kpi-label">Execucoes registradas</span>
-          <strong id="totalRuns">0</strong>
-        </article>
-        <article class="kpi-card">
-          <span class="kpi-label">Melhor tempo CGNR</span>
-          <strong id="bestRecon">-</strong>
-        </article>
-        <article class="kpi-card">
-          <span class="kpi-label">Maior vazao media</span>
-          <strong id="bestThroughput">-</strong>
-        </article>
-        <article class="kpi-card">
-          <span class="kpi-label">Ultimo relatorio</span>
-          <strong id="lastReport">-</strong>
+      <!-- ===================== COMPARACAO PYTHON x C++ ===================== -->
+      <section class="section-block" aria-label="Comparacao Python x C++">
+        <div class="section-title">
+          <h2>Comparacao Python x C++</h2>
+          <span id="comparisonMeta">-</span>
+        </div>
+        <div class="chart-grid">
+          <article class="panel">
+            <div class="panel-heading"><h2>Tempo de reconstrucao</h2><span>ms (menor = melhor)</span></div>
+            <canvas id="timeChart" height="260"></canvas>
+          </article>
+          <article class="panel">
+            <div class="panel-heading"><h2>CPU por reconstrucao</h2><span>ms de CPU</span></div>
+            <canvas id="cpuChart" height="260"></canvas>
+          </article>
+        </div>
+        <article class="panel table-panel">
+          <div class="panel-heading"><h2>Numeros lado a lado</h2><span>media por modelo</span></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Modelo</th>
+                  <th>Metrica</th>
+                  <th class="col-py">Python</th>
+                  <th class="col-cpp">C++</th>
+                  <th>Mais rapido / menor</th>
+                </tr>
+              </thead>
+              <tbody id="comparisonTable"></tbody>
+            </table>
+          </div>
         </article>
       </section>
 
-      <section class="panel table-panel latest-panel" aria-label="Ultima execucao">
-        <div class="panel-heading">
-          <h2>Ultima execucao de saturacao</h2>
+      <!-- ===================== RECURSOS DA MAQUINA POR SERVIDOR ===================== -->
+      <section class="section-block" aria-label="Recursos da maquina por servidor">
+        <div class="section-title">
+          <h2>Uso da maquina por servidor</h2>
+          <span id="machineByServerMeta">-</span>
+        </div>
+        <article class="panel table-panel">
+          <div class="panel-heading">
+            <h2>CPU e memoria da maquina inteira (durante a saturacao)</h2>
+            <span>um servidor por vez</span>
+          </div>
+          <p class="panel-note">Como a saturacao roda um servidor de cada vez, o pico da maquina em cada fase reflete o custo real daquele servidor - inclui o binario C++ que roda no WSL e nao aparece no RSS do processo gateway.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Servidor</th>
+                  <th>CPU maquina pico</th>
+                  <th>CPU maquina media</th>
+                  <th>RAM maquina pico</th>
+                  <th>RAM maquina media</th>
+                  <th>RAM total do PC</th>
+                </tr>
+              </thead>
+              <tbody id="machineTable"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <!-- ===================== SATURACAO ===================== -->
+      <section class="section-block" aria-label="Saturacao">
+        <div class="section-title">
+          <h2>Teste de saturacao</h2>
           <span id="latestLoadFile">-</span>
         </div>
-        <div class="latest-summary" id="latestLoadSummary"></div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Servidor</th>
-                <th>OK</th>
-                <th>Falhas</th>
-                <th>Erro</th>
-                <th>Req/min</th>
-                <th>Vazao</th>
-                <th>Reconstrucao</th>
-                <th>P95</th>
-                <th>Fila</th>
-                <th>CPU</th>
-                <th>RAM pico</th>
-              </tr>
-            </thead>
-            <tbody id="latestLoadTable"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="chart-grid" aria-label="Graficos">
-        <article class="panel">
-          <div class="panel-heading">
-            <h2>Tempo medio de reconstrucao</h2>
-            <span>ms</span>
-          </div>
-          <canvas id="barChart" height="240"></canvas>
-        </article>
-        <article class="panel">
-          <div class="panel-heading">
-            <h2>Historico recente</h2>
-            <span>CGNR</span>
-          </div>
-          <canvas id="timelineChart" height="240"></canvas>
-        </article>
-      </section>
-
-      <section class="data-grid" aria-label="Resultados">
         <article class="panel table-panel">
-          <div class="panel-heading">
-            <h2>Comparativo</h2>
-            <span id="summaryTime">-</span>
-          </div>
+          <div class="panel-heading"><h2>Resumo da ultima saturacao</h2><span id="latestLoadWhen">-</span></div>
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
                   <th>Servidor</th>
-                  <th>Modelo</th>
                   <th>OK</th>
-                  <th>Iter.</th>
+                  <th>Falhas</th>
+                  <th>Erro %</th>
+                  <th>Req/min</th>
+                  <th>Vazao real</th>
                   <th>Reconstrucao</th>
-                  <th>CPU</th>
-                  <th>RAM</th>
-                  <th>Img/s</th>
+                  <th>P95 roundtrip</th>
+                  <th>Fila media</th>
+                  <th>RAM pico proc.</th>
                 </tr>
               </thead>
-              <tbody id="aggregateTable"></tbody>
+              <tbody id="latestLoadTable"></tbody>
             </table>
           </div>
         </article>
-
         <article class="panel table-panel">
-          <div class="panel-heading">
-            <h2>Ultimas requisicoes</h2>
-            <span id="recentCount">0</span>
-          </div>
+          <div class="panel-heading"><h2>Janelas (controle de taxa)</h2><span id="loadCount">0</span></div>
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
                   <th>Servidor</th>
-                  <th>Sinal</th>
-                  <th>Status</th>
-                  <th>Reconstrucao</th>
-                  <th>Roundtrip</th>
-                  <th>Erro</th>
+                  <th>Janela</th>
+                  <th>Taxa</th>
+                  <th>OK</th>
+                  <th>Erro %</th>
+                  <th>P95</th>
+                  <th>Fila</th>
+                  <th>Decisao</th>
                 </tr>
               </thead>
-              <tbody id="recentTable"></tbody>
+              <tbody id="loadTable"></tbody>
             </table>
           </div>
         </article>
       </section>
 
-      <section class="panel table-panel load-panel" aria-label="Saturacao">
-        <div class="panel-heading">
-          <h2>Saturacao adaptativa</h2>
-          <span id="loadCount">0</span>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Servidor</th>
-                <th>Janela</th>
-                <th>Taxa</th>
-                <th>OK</th>
-                <th>Erro</th>
-                <th>P95</th>
-                <th>Fila</th>
-                <th>Decisao</th>
-              </tr>
-            </thead>
-            <tbody id="loadTable"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="image-section" aria-label="Imagens reconstruidas">
-        <div class="panel-heading loose">
+      <!-- ===================== IMAGENS ===================== -->
+      <section class="section-block" aria-label="Imagens reconstruidas">
+        <div class="section-title">
           <h2>Imagens reconstruidas (ao vivo)</h2>
           <span id="imageCount">0</span>
         </div>

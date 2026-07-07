@@ -188,7 +188,8 @@ def main() -> None:
 
         model = CONFIG["models"][model_key]
         signals = [resolve_project_path(path) for path in model["signals"]]
-        signal_path = random.choice(signals[:2])
+        # Sorteia entre TODOS os sinais do modelo, inclusive o terceiro (A-*).
+        signal_path = random.choice(signals)
         original_signal = read_vector(signal_path)
         signal, gain_label = apply_gain(original_signal, gain_mode)
         run_id = str(uuid.uuid4())

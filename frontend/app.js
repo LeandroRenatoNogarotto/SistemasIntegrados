@@ -39,7 +39,11 @@ function cssServer(s) {
 }
 
 async function api(path, options = {}) {
-  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
+  const opts = { ...options };
+  // So manda Content-Type quando ha corpo (POST). Em GET, evitar headers extras
+  // impede o navegador de disparar preflight OPTIONS (que gerava erro HTML).
+  if (opts.body) opts.headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
+  const res = await fetch(path, opts);
   const payload = await res.json();
   if (!res.ok) throw new Error(payload.error || `HTTP ${res.status}`);
   return payload;
@@ -51,6 +55,13 @@ function cleanAggregates(aggregates) {
 }
 
 /* ----------------------------- refresh ----------------------------- */
+// Limpa a mensagem de erro de atualizacao quando o refresh volta a funcionar
+// (senao um erro transitorio, ex.: durante um restart, ficaria "grudado" na tela).
+function clearRefreshError() {
+  const el = $("#runMessage");
+  if (el && el.textContent.startsWith("Falha ao atualizar")) el.textContent = "Pronto.";
+}
+
 async function refreshFast() {
   try {
     const [status, live] = await Promise.all([api("/api/status"), api("/api/live-images")]);
@@ -62,6 +73,7 @@ async function refreshFast() {
     renderRuns(status);
     renderLive(status);
     renderImages(state.liveImages);
+    clearRefreshError();
   } catch (e) {
     $("#runMessage").textContent = `Falha ao atualizar: ${e.message}`;
   }
@@ -75,6 +87,7 @@ async function refreshSlow() {
     renderMachineByServer(summary);
     renderLatestLoad(summary);
     renderLoadWindows(summary);
+    clearRefreshError();
   } catch (e) {
     $("#runMessage").textContent = `Falha ao atualizar: ${e.message}`;
   }

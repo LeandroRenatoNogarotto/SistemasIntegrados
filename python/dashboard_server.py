@@ -555,7 +555,7 @@ def start_compare_run(payload: dict[str, Any]) -> dict[str, Any]:
     model = str(payload.get("model", "30x30"))
     gain = str(payload.get("gain", "scalar"))
     count = int(payload.get("count", 1))
-    if model not in CONFIG["models"]:
+    if model != "random" and model not in CONFIG["models"]:
         raise ValueError(f"modelo invalido: {model}")
     if gain not in {"none", "scalar", "formula"}:
         raise ValueError(f"ganho invalido: {gain}")
@@ -597,7 +597,7 @@ def start_load_run(payload: dict[str, Any]) -> dict[str, Any]:
 
     if server not in {"python", "cpp", "both"}:
         raise ValueError(f"servidor invalido: {server}")
-    if model not in CONFIG["models"]:
+    if model != "random" and model not in CONFIG["models"]:
         raise ValueError(f"modelo invalido: {model}")
     if gain not in {"none", "scalar", "formula"}:
         raise ValueError(f"ganho invalido: {gain}")
@@ -850,6 +850,21 @@ def content_type(path: Path) -> str:
 
 
 class Handler(BaseHTTPRequestHandler):
+    def do_OPTIONS(self) -> None:
+        # Responde preflight/CORS sem cair na pagina de erro HTML 501 do http.server.
+        self.send_response(204)
+        self.send_header("Allow", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def do_HEAD(self) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.end_headers()
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         try:
@@ -925,6 +940,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", mime_type)
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
         if cache_seconds > 0:
             # Imagens sao imutaveis (nome = uuid): o navegador pode cachear e
             # nao re-baixar/re-converter a cada atualizacao do painel.
@@ -934,8 +950,21 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def send_error(self, code: int, message: str | None = None, explain: str | None = None) -> None:
+        # Blindagem: nunca devolve a pagina HTML de erro do http.server; o front
+        # espera JSON. Cobre metodos/rotas nao previstos (501, 400, etc.).
+        try:
+            self.send_json(code, {"error": message or f"HTTP {code}", "code": code})
+        except Exception:
+            pass
+
     def log_message(self, fmt: str, *args: Any) -> None:
-        return
+        # Log leve de acesso, para diagnosticar o que o navegador realmente envia.
+        try:
+            with (LOG_DIR / "dashboard-access.log").open("a", encoding="utf-8") as handle:
+                handle.write(f"{self.command} {self.path} -> " + (fmt % args) + "\n")
+        except Exception:
+            pass
 
 
 def main() -> None:

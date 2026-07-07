@@ -511,12 +511,33 @@ def is_healthy(summary: dict[str, object], args: argparse.Namespace) -> tuple[bo
     return True, "saudavel"
 
 
+def build_candidates(model_arg: str, gain: str) -> list[dict]:
+    """Prepara os sinais (com ganho) de cada modelo a testar.
+
+    Com um modelo fixo, retorna 1 candidato; com "random", retorna um por modelo
+    (30x30 e 60x60) para o teste sortear por requisicao (carga mista).
+    """
+    model_ids = list(CONFIG["models"].keys()) if model_arg == "random" else [model_arg]
+    candidates: list[dict] = []
+    for model_id in model_ids:
+        model = CONFIG["models"][model_id]
+        signal_path = resolve_project_path(random.choice(model["signals"]))  # inclui o 3o sinal (A-*)
+        signal, gain_label = apply_gain(read_vector(signal_path), gain)
+        candidates.append(
+            {
+                "model_id": model_id,
+                "signal": signal,
+                "signal_file": signal_path.name,
+                "gain_label": gain_label,
+            }
+        )
+    return candidates
+
+
 def run_window(
     pool: ThreadPoolExecutor,
     server: str,
-    model: str,
-    signal: np.ndarray,
-    signal_file: str,
+    candidates: list[dict],
     clients: int,
     window: int,
     requests: int,
@@ -533,6 +554,9 @@ def run_window(
             time.sleep(delay)
         sequence = sequence_start + index
         client_id = (index % clients) + 1
+        # Sorteia o modelo/sinal por requisicao. Com um so candidato, e sempre o mesmo;
+        # no modo "aleatorio" mistura os modelos (carga mista).
+        candidate = random.choice(candidates)
         futures.append(
             pool.submit(
                 call_server,
@@ -541,15 +565,15 @@ def run_window(
                 window,
                 rate_per_minute,
                 server,
-                model,
-                signal,
-                signal_file,
+                candidate["model_id"],
+                candidate["signal"],
+                candidate["signal_file"],
             )
         )
     return [future.result() for future in as_completed(futures)]
 
 
-def run_fixed(args: argparse.Namespace, targets: list[str], signal: np.ndarray, signal_file: str) -> tuple[list[dict], list[dict]]:
+def run_fixed(args: argparse.Namespace, targets: list[str], candidates: list[dict]) -> tuple[list[dict], list[dict]]:
     rate = args.rate_per_minute or float(LOAD_CONFIG["initial_rate_per_minute"])
     requests = args.requests or math.ceil(rate * float(args.window_seconds) / 60.0)
     rows: list[dict] = []
@@ -557,7 +581,7 @@ def run_fixed(args: argparse.Namespace, targets: list[str], signal: np.ndarray, 
     sequence = 1
     with ThreadPoolExecutor(max_workers=args.clients) as pool:
         for target in targets:
-            batch = run_window(pool, target, args.model, signal, signal_file, args.clients, 1, requests, rate, sequence)
+            batch = run_window(pool, target, candidates, args.clients, 1, requests, rate, sequence)
             sequence += requests
             rows.extend(batch)
             summary = window_summary(batch)
@@ -582,7 +606,7 @@ def run_fixed(args: argparse.Namespace, targets: list[str], signal: np.ndarray, 
     return rows, windows
 
 
-def run_adaptive(args: argparse.Namespace, targets: list[str], signal: np.ndarray, signal_file: str) -> tuple[list[dict], list[dict]]:
+def run_adaptive(args: argparse.Namespace, targets: list[str], candidates: list[dict]) -> tuple[list[dict], list[dict]]:
     rows: list[dict] = []
     windows: list[dict] = []
     sequence = 1
@@ -599,9 +623,7 @@ def run_adaptive(args: argparse.Namespace, targets: list[str], signal: np.ndarra
                 batch = run_window(
                     pool,
                     target,
-                    args.model,
-                    signal,
-                    signal_file,
+                    candidates,
                     args.clients,
                     window,
                     requests,
@@ -887,7 +909,7 @@ def stop_server_process(proc: subprocess.Popen, log_file: object) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--server", choices=["python", "cpp", "both"], default="python")
-    parser.add_argument("--model", choices=CONFIG["models"].keys(), default="30x30")
+    parser.add_argument("--model", choices=list(CONFIG["models"].keys()) + ["random"], default="30x30")
     parser.add_argument("--mode", choices=["adaptive", "fixed"], default="adaptive")
     parser.add_argument("--clients", default="auto")
     parser.add_argument("--requests", type=int)
@@ -925,17 +947,16 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    model = CONFIG["models"][args.model]
-    signal_path = resolve_project_path(random.choice(model["signals"][:2]))
-    original_signal = read_vector(signal_path)
-    signal, gain_label = apply_gain(original_signal, args.gain)
+    candidates = build_candidates(args.model, args.gain)
+    gain_label = candidates[0]["gain_label"]
+    signal_desc = "aleatorio (30x30+60x60)" if args.model == "random" else candidates[0]["signal_file"]
     targets = ["python", "cpp"] if args.server == "both" else [args.server]
 
     print(
         "[load] "
         f"mode={args.mode} targets={','.join(targets)} model={args.model} clients={args.clients} "
         f"initial={args.initial_rate_per_minute}/min max={args.max_rate_per_minute}/min "
-        f"signal={signal_path.name} gain={gain_label}"
+        f"signal={signal_desc} gain={gain_label}"
     )
 
     if args.manage_servers:
@@ -963,9 +984,9 @@ def main() -> None:
                 print(f"[load] {target} online (sozinho).")
 
             if args.mode == "adaptive":
-                target_rows, target_windows = run_adaptive(args, [target], signal, signal_path.name)
+                target_rows, target_windows = run_adaptive(args, [target], candidates)
             else:
-                target_rows, target_windows = run_fixed(args, [target], signal, signal_path.name)
+                target_rows, target_windows = run_fixed(args, [target], candidates)
             rows.extend(target_rows)
             windows.extend(target_windows)
 
